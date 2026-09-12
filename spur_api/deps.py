@@ -1,8 +1,10 @@
-from spur_api import store as store_module
-from spur_api.store import InMemoryStore
+from arq import ArqRedis
+from fastapi import Request
+
+from spur_api.db.session import get_db  # re-exported for router imports
+
+__all__ = ["get_db", "get_redis"]
 
 
-def get_store() -> InMemoryStore:
-    # Looked up as a module attribute (not imported by value) so tests can
-    # swap `spur_api.store.store` for a fresh instance per test.
-    return store_module.store
+async def get_redis(request: Request) -> ArqRedis:
+    return request.app.state.redis

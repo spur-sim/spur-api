@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: spur
+      POSTGRES_PASSWORD: spur
+      POSTGRES_DB: spur_api
+    # Not published to the host by default - api/worker reach it over the
+    # compose network as `postgres`. Add `ports: ["5432:5432"]` locally if
+    # you want psql access from the host.
+    volumes:
+      - spur_api_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spur"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    # Not published to the host by default - see the postgres service note
+    # above.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    command: sh -c "alembic upgrade head && uvicorn spur_api.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    environment:
+      SPUR_API_DATABASE_URL: postgresql+asyncpg://spur:spur@postgres:5432/spur_api
+      SPUR_API_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: arq spur_api.worker.settings.WorkerSettings
+    environment:
+      SPUR_API_DATABASE_URL: postgresql+asyncpg://spur:spur@postgres:5432/spur_api
+      SPUR_API_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  spur_api_postgres:

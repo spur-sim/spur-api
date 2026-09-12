@@ -1,72 +1,132 @@
-"""Simulation execution.
+"""Run submission and retrieval.
 
-Phase 1 runs a simulation synchronously, in the request-handling process,
-with no chunking or progress streaming. This is deliberately the smallest
-possible thing that proves the resource model and the spur integration
-end-to-end (see the project plan's Phase 1 exit criteria) — Phase 2
-replaces this with a real background worker (arq) that chunks execution
-via repeated `model.run(until=...)` calls and streams progress, without
-changing the `Run`/`SimEvent` shapes this module already produces.
+Actual simulation execution now happens in the background worker (see
+`spur_api/worker/tasks.py`) - this module only ever inserts/reads rows and
+enqueues jobs, never builds or runs a `Model` itself, keeping the request
+path fast regardless of how long a run takes.
 """
 
-from datetime import datetime, timezone
+from uuid import UUID
 
-from spur.core.event import SimEvent
-from spur.core.exception import SpurError
-from spur.core.model import Model
+from arq import ArqRedis
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from spur_api.exceptions import InvalidProjectError
-from spur_api.schemas.project import Project
+from spur.core.event import SimEvent, SimEventType
+
+from spur_api.db.models import ProjectRow, RunEventRow, SimulationRunRow
+from spur_api.exceptions import NotFoundError
 from spur_api.schemas.run import Run, RunStatus
-from spur_api.store import InMemoryStore
 
 
-def _project_dict(project: Project) -> dict:
-    # exclude_unset=True matters here, not just for a leaner payload:
-    # Model.add_components does `if "jitter" in c.keys()` (and similarly
-    # for "collection"), so a key that was never set must be absent from
-    # the dict, not present with value None - mirrors what
-    # spur.io.formats.read_components_json already does for the same
-    # reason.
-    return project.model_dump(
-        include={"components", "routes", "tours", "trains"},
-        mode="json",
-        exclude_unset=True,
+def _to_schema(row: SimulationRunRow) -> Run:
+    return Run.model_validate(row, from_attributes=True)
+
+
+async def submit_run(
+    db: AsyncSession,
+    redis: ArqRedis,
+    project_id: UUID,
+    until: int | None,
+    chunk_size: int | None,
+) -> Run:
+    project_row = await db.get(ProjectRow, project_id)
+    if project_row is None:
+        raise NotFoundError(f"Project {project_id} not found")
+
+    run_row = SimulationRunRow(
+        project_id=project_id, requested_until=until, chunk_size=chunk_size
     )
+    db.add(run_row)
+    await db.commit()
+    await db.refresh(run_row)
+
+    job = await redis.enqueue_job("run_simulation", str(run_row.id))
+    run_row.arq_job_id = job.job_id if job is not None else None
+    await db.commit()
+    await db.refresh(run_row)
+    return _to_schema(run_row)
 
 
-def execute_run(store: InMemoryStore, run: Run, project: Project) -> Run:
-    """Run a simulation to completion and persist the result onto `run`.
+async def get_run(db: AsyncSession, run_id: UUID) -> Run:
+    row = await db.get(SimulationRunRow, run_id)
+    if row is None:
+        raise NotFoundError(f"Run {run_id} not found")
+    return _to_schema(row)
 
-    Mutates and returns `run` via the store, transitioning it through
-    `running` to a terminal status (`completed` or `failed`).
+
+async def list_runs(
+    db: AsyncSession, project_id: UUID | None, status: RunStatus | None
+) -> list[Run]:
+    stmt = select(SimulationRunRow)
+    if project_id is not None:
+        stmt = stmt.where(SimulationRunRow.project_id == project_id)
+    if status is not None:
+        stmt = stmt.where(SimulationRunRow.status == status)
+    result = await db.execute(stmt)
+    return [_to_schema(r) for r in result.scalars().all()]
+
+
+async def delete_run(db: AsyncSession, run_id: UUID) -> None:
+    row = await db.get(SimulationRunRow, run_id)
+    if row is None:
+        raise NotFoundError(f"Run {run_id} not found")
+    await db.delete(row)
+    await db.commit()
+
+
+async def request_cancel(db: AsyncSession, run_id: UUID) -> Run:
+    """Flag a run for cooperative cancellation.
+
+    The worker checks this flag between chunks (see
+    `spur_api/worker/tasks.py::is_cancelled`), so cancellation is not
+    instantaneous - a run already past its last chunk boundary before
+    the flag is set will still finish normally.
     """
-    run.status = RunStatus.RUNNING
-    run.started_at = datetime.now(timezone.utc)
-    store.update_run(run)
+    row = await db.get(SimulationRunRow, run_id)
+    if row is None:
+        raise NotFoundError(f"Run {run_id} not found")
+    row.cancel_requested = True
+    await db.commit()
+    await db.refresh(row)
+    return _to_schema(row)
 
-    events: list[SimEvent] = []
-    try:
-        model = Model.from_project_dictionary(
-            _project_dict(project), event_sink=events.append
+
+async def get_run_events(
+    db: AsyncSession,
+    run_id: UUID,
+    since_time: int | None = None,
+    train_uid: str | None = None,
+    component_uid: str | None = None,
+    event_type: SimEventType | None = None,
+    limit: int = 1000,
+    offset: int = 0,
+) -> list[SimEvent]:
+    run_row = await db.get(SimulationRunRow, run_id)
+    if run_row is None:
+        raise NotFoundError(f"Run {run_id} not found")
+
+    stmt = select(RunEventRow).where(RunEventRow.run_id == run_id).order_by(
+        RunEventRow.seq
+    )
+    if since_time is not None:
+        stmt = stmt.where(RunEventRow.time >= since_time)
+    if train_uid is not None:
+        stmt = stmt.where(RunEventRow.train_uid == train_uid)
+    if component_uid is not None:
+        stmt = stmt.where(RunEventRow.component_uid == component_uid)
+    if event_type is not None:
+        stmt = stmt.where(RunEventRow.event == event_type.value)
+    stmt = stmt.offset(offset).limit(limit)
+
+    result = await db.execute(stmt)
+    return [
+        SimEvent(
+            time=r.time,
+            event=r.event,
+            train_uid=r.train_uid,
+            component_uid=r.component_uid,
+            component_type=r.component_type,
         )
-    except (SpurError, KeyError, ValueError, TypeError) as e:
-        raise InvalidProjectError(f"Could not build a model from project: {e}") from e
-
-    try:
-        model.start()
-        model.run(until=run.requested_until)
-        model.log_current_state()
-    except Exception as e:  # noqa: BLE001 - never leave a run stuck in `running`
-        run.status = RunStatus.FAILED
-        run.error_message = str(e)
-        run.finished_at = datetime.now(timezone.utc)
-        store.update_run(run)
-        store.append_run_events(run.id, events)
-        return run
-
-    store.append_run_events(run.id, events)
-    run.status = RunStatus.COMPLETED
-    run.sim_time_now = model.now
-    run.finished_at = datetime.now(timezone.utc)
-    return store.update_run(run)
+        for r in result.scalars().all()
+    ]
