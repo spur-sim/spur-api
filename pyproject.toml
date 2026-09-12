@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spur-api"
+version = "0.1.0"
+description = "HTTP API service wrapping the spur mesoscopic railway simulation engine"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    # Pinned to the feature branch adding the structured SimEvent API
+    # (spur-sim/spur PR #98) until that branch merges and a released
+    # spur version includes it.
+    "spur @ git+https://github.com/spur-sim/spur.git@feature/structured-events",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+]
+
+[tool.setuptools.packages.find]
+include = ["spur_api*"]
