@@ -12,11 +12,17 @@ Phase 1 ships the simplest possible backend: if `auth_enabled` is False
 matching one of `settings.api_keys`.
 """
 
+import hashlib
+import hmac
 from typing import Protocol
 
 from fastapi import Header, HTTPException, status
 
 from spur_api.config import settings
+
+
+def key_fingerprint(key: str) -> str:
+    return "key:" + hashlib.sha256(key.encode()).hexdigest()[:12]
 
 
 class Principal(Protocol):
@@ -43,8 +49,10 @@ def current_principal(
             detail="Missing or malformed Authorization header",
         )
     token = authorization.removeprefix("Bearer ").strip()
-    if token not in settings.api_keys:
+    if not any(hmac.compare_digest(token, k) for k in settings.api_keys):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
         )
-    return StaticPrincipal(id=token)
+    # The principal id ends up stored as a project's `owner` and returned
+    # in API responses, so it must never be the secret key itself.
+    return StaticPrincipal(id=key_fingerprint(token))

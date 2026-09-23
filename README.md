@@ -4,11 +4,22 @@ An HTTP API service wrapping [spur](https://github.com/spur-sim/spur), a mesosco
 simulation engine, so it can be driven by anything that speaks HTTP rather than only
 Python. MIT-licensed, like spur itself.
 
-**Status: Phase 2.** Simulation runs execute in a background worker (arq/Redis), with
-Postgres persisting projects, runs, and structured events - submitting a run returns
-immediately with `status=queued`; poll `GET /v1/runs/{id}` for progress. Roadmap: Phase 3
-adds WebSocket/SSE progress streaming so polling isn't required; Phase 4 adds a real auth
-backend and finished deployment docs.
+**Status: prototype.** Simulation runs execute in a background worker (arq/Redis), with
+Postgres persisting projects, runs, and structured events. Submitting a run returns
+immediately with `status=queued`; poll `GET /v1/runs/{id}` until it reaches `completed`,
+`failed`, or `cancelled`, then read the events.
+
+**Known limitations**
+- **Polling only.** No WebSocket/SSE streaming yet. Deferred until polling latency is a
+  real problem; the data already lives in Postgres, so streaming can be added without
+  changing the existing endpoints.
+- **spur dependency is pinned to a branch.** `pyproject.toml` installs spur from its
+  `feature/structured-events` branch (spur-sim/spur PR #98), which adds the structured
+  event API this service relies on. This needs to move to a released spur version once that
+  PR merges.
+- **Runs aren't reproducible.** spur's jitter is unseeded, so two runs of the same project
+  can produce different events.
+- **Single tenant.** Auth is a static API-key check (below), with no users, orgs, or roles.
 
 ## Quickstart (Docker)
 
@@ -72,6 +83,18 @@ A "project" is exactly `spur.io.schema.ProjectSpec` (components/routes/tours/tra
 API-owned metadata (`id`, `owner`, timestamps) - see `spur_api/schemas/project.py`. This is
 deliberately not a divergent resource model: anything valid for `spur.io.formats.read_project_json`
 is valid here.
+
+## Authentication
+
+Off by default. To require an API key on every endpoint except `/healthz` and `/readyz`:
+
+```bash
+SPUR_API_AUTH_ENABLED=true
+SPUR_API_API_KEYS='["some-long-random-key"]'
+```
+
+Clients then send `Authorization: Bearer some-long-random-key`. A project's `owner` is
+recorded as a short hash of the key that created it, never the key itself.
 
 ## Configuration
 
