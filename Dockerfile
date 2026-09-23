@@ -2,9 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# git is needed at build time only, to install spur from its GitHub
-# branch (see pyproject.toml) until a released version includes the
-# structured SimEvent API (spur-sim/spur PR #98).
+# git is needed at build time only, to install spur from its GitHub main
+# branch (see pyproject.toml) until spur publishes a release.
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 

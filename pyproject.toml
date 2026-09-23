@@ -19,10 +19,9 @@ dependencies = [
     "alembic>=1.13",
     "arq>=0.26",
     "redis>=5.0",
-    # The structured SimEvent API (spur-sim/spur PR #98) is merged into
-    # 97-api-cleanup but not yet released or on main; move this to a
-    # released version (or main) once one includes it.
-    "spur @ git+https://github.com/spur-sim/spur.git@97-api-cleanup",
+    # Installed from spur's main branch, which has the structured SimEvent
+    # API. Move to a released version once spur publishes one.
+    "spur @ git+https://github.com/spur-sim/spur.git@main",
 ]
 
 [project.optional-dependencies]

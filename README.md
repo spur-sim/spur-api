@@ -13,10 +13,8 @@ immediately with `status=queued`; poll `GET /v1/runs/{id}` until it reaches `com
 - **Polling only.** No WebSocket/SSE streaming yet. Deferred until polling latency is a
   real problem; the data already lives in Postgres, so streaming can be added without
   changing the existing endpoints.
-- **spur dependency is pinned to a branch.** `pyproject.toml` installs spur from its
-  `97-api-cleanup` branch, which contains the structured event API this service relies on
-  (spur-sim/spur PR #98). This needs to move to a released spur version, or `main`, once
-  `97-api-cleanup` lands there.
+- **spur is installed from its `main` branch**, not a released version, so a new spur
+  commit can change behaviour under this service. Pin to a release once spur publishes one.
 - **Runs aren't reproducible.** spur's jitter is unseeded, so two runs of the same project
   can produce different events.
 - **Single tenant.** Auth is a static API-key check (below), with no users, orgs, or roles.
