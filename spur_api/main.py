@@ -7,7 +7,12 @@ from fastapi.responses import JSONResponse
 
 from spur_api.auth import current_principal
 from spur_api.config import settings
-from spur_api.exceptions import InvalidProjectError, NotFoundError
+from spur_api.exceptions import (
+    InvalidProjectError,
+    NotFoundError,
+    RunAnalysisError,
+    RunNotReadyError,
+)
 from spur_api.routers import health, projects, runs
 
 
@@ -33,6 +38,14 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(InvalidProjectError)
     def _invalid_project(request: Request, exc: InvalidProjectError):
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    @app.exception_handler(RunNotReadyError)
+    def _run_not_ready(request: Request, exc: RunNotReadyError):
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(RunAnalysisError)
+    def _run_analysis_error(request: Request, exc: RunAnalysisError):
         return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     return app

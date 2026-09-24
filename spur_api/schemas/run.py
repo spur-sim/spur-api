@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from spur.analysis import ComponentStats, RunStats, TrainStats
+
 # numpy's default_rng accepts any non-negative integer; the DB column is a
 # signed 64-bit BigInteger.
 MAX_SEED = 2**63 - 1
@@ -44,3 +46,16 @@ class Run(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     finished_at: datetime | None = None
+
+
+class RunSummary(BaseModel):
+    """Aggregate metrics for a run, computed by `spur.analysis.analyze`.
+
+    `status` says how far the run got: a run that is still running, or was
+    cancelled or failed, reports the metrics of the events it has produced.
+    """
+
+    status: RunStatus
+    run: RunStats
+    components: list[ComponentStats]
+    trains: list[TrainStats]

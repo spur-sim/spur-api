@@ -8,3 +8,11 @@ class NotFoundError(SpurApiError):
 
 class InvalidProjectError(SpurApiError):
     """A project spec failed spur's own validation."""
+
+
+class RunNotReadyError(SpurApiError):
+    """A run has no results yet (it is still queued)."""
+
+
+class RunAnalysisError(SpurApiError):
+    """A run's events could not be analysed against its project."""

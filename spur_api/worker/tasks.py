@@ -18,7 +18,11 @@ async def run_simulation(ctx, run_id: str) -> None:
 
     async with session_factory() as db:
         run_row = await db.get(SimulationRunRow, UUID(run_id))
-        project_row = await db.get(ProjectRow, run_row.project_id)
+        # Run what was submitted, not whatever the project has become since.
+        # Runs from before spec_snapshot existed fall back to the live project.
+        spec = run_row.spec_snapshot
+        if spec is None:
+            spec = (await db.get(ProjectRow, run_row.project_id)).spec
 
         run_row.status = RunStatus.RUNNING
         run_row.started_at = datetime.now(timezone.utc)
@@ -52,7 +56,7 @@ async def run_simulation(ctx, run_id: str) -> None:
             return run_row.cancel_requested
 
         runner = SpurRunner(
-            project_row.spec,
+            spec,
             until=run_row.requested_until,
             chunk_size=run_row.chunk_size,
             seed=run_row.seed,

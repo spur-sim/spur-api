@@ -51,6 +51,12 @@ class SimulationRunRow(Base):
     requested_until: Mapped[int | None] = mapped_column(nullable=True)
     chunk_size: Mapped[int | None] = mapped_column(nullable=True)
     seed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # A copy of the project spec taken when the run was submitted. Delays are
+    # measured against the schedule, and a project can be edited after a run,
+    # so the run's events must be analysed against what it actually ran.
+    # Nullable: runs from before this column existed fall back to the live
+    # project.
+    spec_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     sim_time_now: Mapped[int | None] = mapped_column(nullable=True)
     arq_job_id: Mapped[str | None] = mapped_column(nullable=True)
     error_message: Mapped[str | None] = mapped_column(nullable=True)

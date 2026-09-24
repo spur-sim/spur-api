@@ -89,6 +89,33 @@ To replay a run you didn't seed, read its `seed` from `GET /v1/runs/{id}` and re
 it. Compare scenarios by using the same seed on both, so differences come from your change and
 not from random draws. Reproducibility holds for a given version of spur.
 
+## Run metrics
+
+Once a run has started, its events can be turned into results:
+
+```bash
+# Aggregates: run totals, and stats per component and per train
+curl -s "http://127.0.0.1:8000/v1/runs/$RUN_ID/summary"
+
+# One row per train per component, with in/out times, scheduled times and delays
+curl -s "http://127.0.0.1:8000/v1/runs/$RUN_ID/visits?train_uid=T-0&limit=20"
+```
+
+`/summary` reports dwell time (occupancy), headway between trains, arrival and departure
+delay, and an on-time percentage (`?on_time_threshold=120`, in simulation time units).
+`/visits` takes `train_uid`, `component_uid`, `limit` (max 10000) and `offset`. The numbers
+come from spur's `analyze`; see spur's
+[analysis guide](https://spur-sim.readthedocs.io/en/latest/guide/analysis.html) for exact
+definitions. Trains are held to their schedule, so delays are never negative.
+
+- A run that is still `queued` returns `409`. A run that is running, cancelled or failed
+  reports the metrics of the events it has produced so far, with its `status`.
+- Delays are measured against the project as it was **when the run was submitted**: each run
+  keeps a copy of the project spec, so editing a project afterwards doesn't change the results
+  of earlier runs, and a run that was queued before an edit still runs the old version. The
+  copy is roughly 80 KB for the Line 4 example. Runs created before this existed fall back to
+  the project's current spec.
+
 ## Project shape
 
 A "project" is exactly `spur.io.schema.ProjectSpec` (components/routes/tours/trains) plus
