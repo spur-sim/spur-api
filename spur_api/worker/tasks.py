@@ -57,7 +57,12 @@ async def run_simulation(ctx, run_id: str) -> None:
 
         runner = SpurRunner(
             spec,
-            until=run_row.requested_until,
+            # until_target is null only for runs from before it existed.
+            until=(
+                run_row.until_target
+                if run_row.until_target is not None
+                else run_row.requested_until
+            ),
             chunk_size=run_row.chunk_size,
             seed=run_row.seed,
         )

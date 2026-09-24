@@ -20,6 +20,7 @@ from spur.core.exception import InputMismatchError
 from spur_api.db.models import ProjectRow, RunEventRow, SimulationRunRow
 from spur_api.exceptions import NotFoundError, RunAnalysisError, RunNotReadyError
 from spur_api.schemas.run import MAX_SEED, Run, RunStatus, RunSummary
+from spur_api.worker.runner import derive_until
 
 
 def _to_schema(row: SimulationRunRow) -> Run:
@@ -56,6 +57,7 @@ async def submit_run(
     run_row = SimulationRunRow(
         project_id=project_id,
         requested_until=until,
+        until_target=until if until is not None else derive_until(project_row.spec),
         chunk_size=chunk_size,
         seed=seed,
         spec_snapshot=project_row.spec,

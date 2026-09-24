@@ -3,7 +3,8 @@ and cancellation behavior can be tested independent of the persistence
 layer built on top of it in spur_api/worker/tasks.py.
 """
 
-from spur_api.worker.runner import SpurRunner
+from spur_api.config import settings
+from spur_api.worker.runner import SpurRunner, derive_until
 
 
 def _project_dict(line4_project_dict):
@@ -112,3 +113,13 @@ async def test_same_seed_reproduces_a_full_day_run_and_different_seed_differs(
 
     assert await run(7) == await run(7)
     assert await run(7) != await run(8)
+
+
+def test_derive_until_is_the_latest_tour_deletion_time():
+    project = {"tours": [{"deletion_time": 5}, {"deletion_time": 9}, {"deletion_time": 7}]}
+    assert derive_until(project) == 9
+
+
+def test_derive_until_falls_back_to_the_default_horizon():
+    assert derive_until({"tours": []}) == settings.default_run_horizon
+    assert derive_until({}) == settings.default_run_horizon

@@ -14,6 +14,16 @@ from spur.core.model import Model
 from spur_api.config import settings
 from spur_api.exceptions import InvalidProjectError
 
+def derive_until(project_dict: dict) -> int:
+    """The simulation time a run goes to when none is requested: the latest
+    tour deletion_time in the project, or `settings.default_run_horizon` if
+    it has no tours."""
+    return max(
+        (t["deletion_time"] for t in project_dict.get("tours", [])),
+        default=settings.default_run_horizon,
+    )
+
+
 OnChunk = Callable[[int, list[SimEvent]], Awaitable[None]]
 IsCancelled = Callable[[], Awaitable[bool]]
 
@@ -63,11 +73,6 @@ class SpurRunner:
                 f"Could not build a model from project: {e}"
             ) from e
 
-    @staticmethod
-    def _derive_until(model: Model) -> int:
-        deletion_times = [t.deletion_time for t in model._tours.values()]
-        return max(deletion_times, default=settings.default_run_horizon)
-
     async def run(self, on_chunk: OnChunk, is_cancelled: IsCancelled) -> str:
         """Run to completion or cancellation.
 
@@ -85,7 +90,9 @@ class SpurRunner:
         model = self._build_model(events_batch.append)
         model.start()
 
-        until_target = self.until if self.until is not None else self._derive_until(model)
+        until_target = (
+            self.until if self.until is not None else derive_until(self._project_dict)
+        )
         chunk = self.chunk_size or max(1, until_target // settings.default_chunk_count)
 
         while model.now < until_target:

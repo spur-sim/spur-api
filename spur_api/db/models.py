@@ -49,6 +49,11 @@ class SimulationRunRow(Base):
     )
     status: Mapped[RunStatus] = mapped_column(default=RunStatus.QUEUED)
     requested_until: Mapped[int | None] = mapped_column(nullable=True)
+    # The simulation time the run will go to: requested_until if given, else
+    # derived from the project's tours when the run was submitted. Lets a
+    # client show progress as sim_time_now / until_target. Null for runs
+    # created before this column existed.
+    until_target: Mapped[int | None] = mapped_column(nullable=True)
     chunk_size: Mapped[int | None] = mapped_column(nullable=True)
     seed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     # A copy of the project spec taken when the run was submitted. Delays are

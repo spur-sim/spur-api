@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from spur_api.auth import current_principal
@@ -25,6 +26,17 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="spur-api", version="0.1.0", lifespan=lifespan)
+
+    if settings.cors_origins:
+        # Added before the routers so browser preflight (OPTIONS) requests
+        # are answered here and never reach the auth dependency. No
+        # credentials/cookies: clients authenticate with a bearer header.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_methods=["*"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
 
     # Health endpoints stay unauthenticated (orchestrators probe them);
     # everything else requires a principal.

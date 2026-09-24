@@ -40,6 +40,7 @@ class Run(BaseModel):
     project_id: UUID
     status: RunStatus = RunStatus.QUEUED
     requested_until: int | None = None
+    until_target: int | None = None
     seed: int | None = None
     sim_time_now: int | None = None
     error_message: str | None = None

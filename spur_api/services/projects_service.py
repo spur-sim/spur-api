@@ -1,11 +1,16 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from spur_api.db.models import ProjectRow
 from spur_api.exceptions import NotFoundError
-from spur_api.schemas.project import Project, ProjectCreate
+from spur_api.schemas.project import (
+    Project,
+    ProjectCounts,
+    ProjectCreate,
+    ProjectSummary,
+)
 
 
 def _to_schema(row: ProjectRow) -> Project:
@@ -34,9 +39,49 @@ async def get_project(db: AsyncSession, project_id: UUID) -> Project:
     return _to_schema(row)
 
 
-async def list_projects(db: AsyncSession) -> list[Project]:
-    result = await db.execute(select(ProjectRow))
-    return [_to_schema(r) for r in result.scalars().all()]
+async def list_projects(
+    db: AsyncSession, limit: int = 100, offset: int = 0
+) -> list[ProjectSummary]:
+    # Selects only the small columns and counts each spec section in SQL, so
+    # listing never loads the (large) spec of every project.
+    def count(section: str):
+        return func.coalesce(func.jsonb_array_length(ProjectRow.spec[section]), 0)
+
+    stmt = (
+        select(
+            ProjectRow.id,
+            ProjectRow.name,
+            ProjectRow.spur_version,
+            ProjectRow.owner,
+            ProjectRow.created_at,
+            ProjectRow.updated_at,
+            count("components").label("components"),
+            count("routes").label("routes"),
+            count("tours").label("tours"),
+            count("trains").label("trains"),
+        )
+        .order_by(ProjectRow.created_at.desc(), ProjectRow.id)
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return [
+        ProjectSummary(
+            id=r.id,
+            name=r.name,
+            spur_version=r.spur_version,
+            owner=r.owner,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+            counts=ProjectCounts(
+                components=r.components,
+                routes=r.routes,
+                tours=r.tours,
+                trains=r.trains,
+            ),
+        )
+        for r in result.all()
+    ]
 
 
 async def update_project(

@@ -197,3 +197,59 @@ async def test_largest_allowed_seed_round_trips_through_the_database(
     resp = await client.post(f"/v1/projects/{project_id}/runs", json={"seed": seed})
     assert resp.status_code == 202
     assert resp.json()["seed"] == seed
+
+
+async def test_until_target_is_the_requested_time(client, line4_project_dict):
+    project_id = await _create_project(client, line4_project_dict)
+    run = (
+        await client.post(f"/v1/projects/{project_id}/runs", json={"until": 3600})
+    ).json()
+    assert run["requested_until"] == 3600
+    assert run["until_target"] == 3600
+
+
+async def test_until_target_is_derived_when_no_end_is_requested(
+    client, run_worker, line4_project_dict
+):
+    project_id = await _create_project(client, line4_project_dict)
+    expected = max(t["deletion_time"] for t in line4_project_dict["tours"])
+
+    run = (await client.post(f"/v1/projects/{project_id}/runs", json={})).json()
+    # Known immediately, while still queued, so a client can show 0 / target.
+    assert run["status"] == "queued"
+    assert run["requested_until"] is None
+    assert run["until_target"] == expected
+
+    await run_worker(run["id"])
+    done = (await client.get(f"/v1/runs/{run['id']}")).json()
+    assert done["status"] == "completed"
+    assert done["sim_time_now"] == done["until_target"] == expected
+
+
+async def test_runs_without_until_target_still_run(
+    client, run_worker, line4_project_dict
+):
+    from uuid import UUID
+
+    from sqlalchemy import update
+
+    from spur_api.db.models import SimulationRunRow
+    from spur_api.db.session import get_session_factory
+
+    project_id = await _create_project(client, line4_project_dict)
+    run = (
+        await client.post(f"/v1/projects/{project_id}/runs", json={"until": 3600})
+    ).json()
+    async with get_session_factory()() as db:
+        await db.execute(
+            update(SimulationRunRow)
+            .where(SimulationRunRow.id == UUID(run["id"]))
+            .values(until_target=None)
+        )
+        await db.commit()
+
+    await run_worker(run["id"])
+
+    done = (await client.get(f"/v1/runs/{run['id']}")).json()
+    assert done["status"] == "completed" and done["sim_time_now"] == 3600
+    assert done["until_target"] is None

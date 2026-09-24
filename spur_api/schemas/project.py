@@ -9,7 +9,7 @@ not a reinvented resource model.
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from spur.io.schema import ProjectSpec
 
@@ -29,3 +29,23 @@ class Project(ProjectSpec):
     owner: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ProjectCounts(BaseModel):
+    components: int
+    routes: int
+    tours: int
+    trains: int
+
+
+class ProjectSummary(BaseModel):
+    """A project without its spec: enough to show in a list. Fetch
+    `GET /v1/projects/{id}` for the full spec."""
+
+    id: UUID
+    name: str | None = None
+    spur_version: str
+    owner: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    counts: ProjectCounts

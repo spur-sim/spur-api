@@ -10,6 +10,11 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="SPUR_API_", env_file=".env")
 
+    # Browser origins allowed to call the API from another origin, e.g.
+    # ["https://app.example.com"]. Empty (the default) disables CORS
+    # entirely; use ["*"] only for local experiments.
+    cors_origins: list[str] = []
+
     auth_enabled: bool = False
     api_keys: list[str] = []
 

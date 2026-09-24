@@ -135,6 +135,28 @@ SPUR_API_API_KEYS='["some-long-random-key"]'
 Clients then send `Authorization: Bearer some-long-random-key`. A project's `owner` is
 recorded as a short hash of the key that created it, never the key itself.
 
+## Building a front end
+
+- **Browser access (CORS).** A web app served from a different origin than the API needs
+  the API to allow it. Set the origins, as a JSON list, and leave it empty (the default)
+  to disable CORS entirely:
+
+  ```bash
+  SPUR_API_CORS_ORIGINS='["http://localhost:3000"]'
+  ```
+
+  Only list origins you control; `["*"]` is for local experiments. Alternatively, serve the
+  app and the API from one origin behind a reverse proxy and you don't need this at all.
+  Clients authenticate with the bearer header, not cookies.
+- **Listing projects** (`GET /v1/projects`) returns lightweight summaries (id, name,
+  timestamps, and counts of components/routes/tours/trains), newest first, with
+  `limit`/`offset`. Fetch `GET /v1/projects/{id}` for the full spec.
+- **Progress.** A run reports `sim_time_now` and `until_target`, so progress is
+  `sim_time_now / until_target`. `until_target` is set as soon as the run is submitted:
+  the `until` you asked for, or otherwise the latest tour end time in the project.
+- The interactive API reference is served at `/docs`, and the OpenAPI spec at
+  `/openapi.json`, which most front-end toolchains can generate a typed client from.
+
 ## Configuration
 
 See `.env.example`.
