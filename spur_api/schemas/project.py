@@ -9,6 +9,8 @@ not a reinvented resource model.
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
+from typing import Literal, Optional
+
 from pydantic import BaseModel, Field
 
 from spur.io.schema import ProjectSpec
@@ -49,3 +51,13 @@ class ProjectSummary(BaseModel):
     created_at: datetime
     updated_at: datetime
     counts: ProjectCounts
+
+
+class ProjectEnvelope(BaseModel):
+    """The fields of a project that `POST /v1/projects` requires besides the
+    four sections, which `spur.validation.validate` checks. Together they mean
+    exactly what `ProjectSpec` accepts."""
+
+    type: Literal["SpurProject"]
+    spur_version: str
+    name: Optional[str] = None

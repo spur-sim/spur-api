@@ -16,9 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from spur.analysis import Visit, analyze
 from spur.core.event import SimEvent, SimEventType
 from spur.core.exception import InputMismatchError
+from spur.validation import validate
 
 from spur_api.db.models import ProjectRow, RunEventRow, SimulationRunRow
-from spur_api.exceptions import NotFoundError, RunAnalysisError, RunNotReadyError
+from spur_api.exceptions import (
+    NotFoundError,
+    ProjectInvalidError,
+    RunAnalysisError,
+    RunNotReadyError,
+)
 from spur_api.schemas.run import MAX_SEED, Run, RunStatus, RunSummary
 from spur_api.worker.runner import derive_until
 
@@ -48,6 +54,16 @@ async def submit_run(
     project_row = await db.get(ProjectRow, project_id)
     if project_row is None:
         raise NotFoundError(f"Project {project_id} not found")
+
+    # Saving a project is permissive so drafts can be stored, so check it here
+    # rather than queue a run that is certain to fail. This also covers
+    # projects saved before validation existed. Warnings don't block a run.
+    result = validate(project_row.spec)
+    if not result.valid:
+        errors = sum(i.severity == "error" for i in result.issues)
+        raise ProjectInvalidError(
+            f"Project {project_id} has {errors} error(s), so it can't be run", result.issues
+        )
 
     if seed is None:
         # Always record a seed, even when the caller didn't ask for one, so

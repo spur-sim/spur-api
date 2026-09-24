@@ -89,6 +89,41 @@ To replay a run you didn't seed, read its `seed` from `GET /v1/runs/{id}` and re
 it. Compare scenarios by using the same seed on both, so differences come from your change and
 not from random draws. Reproducibility holds for a given version of spur.
 
+## Validating a project
+
+`POST /v1/validate` checks a project without saving it and reports **every** problem at
+once, each with the path to the offending item. It accepts any JSON, so an editor can check a
+draft that isn't valid yet:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/v1/validate \
+  -H "Content-Type: application/json" -d @draft.json
+```
+
+```json
+{
+  "valid": false,
+  "issues": [
+    {"severity": "error", "path": "components[2].args.capcity",
+     "message": "Unknown argument 'capcity' for TimedTrack. Expected: traversal_time, capacity"},
+    {"severity": "warning", "path": "tours[0].routes",
+     "message": "Tour has no routes; trains on it will not move"}
+  ]
+}
+```
+
+It always returns `200`: an invalid project is a result, not an error. Errors make a project
+invalid; warnings (things that are allowed but probably unintended) don't. The checks are
+listed in spur's [JSON specification guide](https://spur-sim.readthedocs.io/en/latest/guide/json_specification.html#checking-a-project).
+
+- **Saving is permissive.** `POST`/`PUT /v1/projects` still accept a project with structural
+  errors, so an editor can save work in progress. Validate when you want to know.
+- **Running is not.** Submitting a run validates the project first. If it has errors you get
+  `422` with `{"detail": ..., "issues": [...]}`, and no run is created or queued. Warnings
+  don't block a run.
+- Argument *values* (a negative traversal time, say) are only checked when the model is
+  built, so those still fail the run itself rather than the submission.
+
 ## Run metrics
 
 Once a run has started, its events can be turned into results:

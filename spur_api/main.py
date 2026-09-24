@@ -11,10 +11,11 @@ from spur_api.config import settings
 from spur_api.exceptions import (
     InvalidProjectError,
     NotFoundError,
+    ProjectInvalidError,
     RunAnalysisError,
     RunNotReadyError,
 )
-from spur_api.routers import health, projects, runs
+from spur_api.routers import health, projects, runs, validate
 
 
 @asynccontextmanager
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(projects.router, dependencies=[Depends(current_principal)])
     app.include_router(runs.router, dependencies=[Depends(current_principal)])
+    app.include_router(validate.router, dependencies=[Depends(current_principal)])
 
     @app.exception_handler(NotFoundError)
     def _not_found(request: Request, exc: NotFoundError):
@@ -51,6 +53,16 @@ def create_app() -> FastAPI:
     @app.exception_handler(InvalidProjectError)
     def _invalid_project(request: Request, exc: InvalidProjectError):
         return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    @app.exception_handler(ProjectInvalidError)
+    def _project_invalid(request: Request, exc: ProjectInvalidError):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": str(exc),
+                "issues": [i.model_dump() for i in exc.issues],
+            },
+        )
 
     @app.exception_handler(RunNotReadyError)
     def _run_not_ready(request: Request, exc: RunNotReadyError):
