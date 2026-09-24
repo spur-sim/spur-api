@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -50,6 +50,7 @@ class SimulationRunRow(Base):
     status: Mapped[RunStatus] = mapped_column(default=RunStatus.QUEUED)
     requested_until: Mapped[int | None] = mapped_column(nullable=True)
     chunk_size: Mapped[int | None] = mapped_column(nullable=True)
+    seed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     sim_time_now: Mapped[int | None] = mapped_column(nullable=True)
     arq_job_id: Mapped[str | None] = mapped_column(nullable=True)
     error_message: Mapped[str | None] = mapped_column(nullable=True)

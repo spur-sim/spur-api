@@ -55,6 +55,7 @@ async def run_simulation(ctx, run_id: str) -> None:
             project_row.spec,
             until=run_row.requested_until,
             chunk_size=run_row.chunk_size,
+            seed=run_row.seed,
         )
 
         try:

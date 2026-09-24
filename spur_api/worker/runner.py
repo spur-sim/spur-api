@@ -36,6 +36,9 @@ class SpurRunner:
     chunk_size : int, optional
         Sim-time units per `model.run(until=...)` call. If None, derived
         so the run produces roughly `settings.default_chunk_count` chunks.
+    seed : int, optional
+        Seeds the model's random number generator; the same project and
+        seed reproduce the same run. If None, the run is not reproducible.
     """
 
     def __init__(
@@ -43,15 +46,17 @@ class SpurRunner:
         project_dict: dict,
         until: int | None = None,
         chunk_size: int | None = None,
+        seed: int | None = None,
     ) -> None:
         self._project_dict = project_dict
         self.until = until
         self.chunk_size = chunk_size
+        self.seed = seed
 
     def _build_model(self, event_sink: Callable[[SimEvent], None]) -> Model:
         try:
             return Model.from_project_dictionary(
-                self._project_dict, event_sink=event_sink
+                self._project_dict, event_sink=event_sink, seed=self.seed
             )
         except (SpurError, KeyError, ValueError, TypeError) as e:
             raise InvalidProjectError(

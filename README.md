@@ -15,8 +15,6 @@ immediately with `status=queued`; poll `GET /v1/runs/{id}` until it reaches `com
   changing the existing endpoints.
 - **spur is installed from its `main` branch**, not a released version, so a new spur
   commit can change behaviour under this service. Pin to a release once spur publishes one.
-- **Runs aren't reproducible.** spur's jitter is unseeded, so two runs of the same project
-  can produce different events.
 - **Single tenant.** Auth is a static API-key check (below), with no users, orgs, or roles.
 
 ## Quickstart (Docker)
@@ -74,6 +72,22 @@ with anything already running on the standard ports). Then:
 ```bash
 pytest
 ```
+
+## Reproducible runs
+
+Runs use random jitter, so by default two runs of the same project differ. Every run has a
+`seed`: pass one when submitting to make the run repeatable, or omit it and the server picks
+one and records it on the run.
+
+```bash
+# Same project + same seed = identical events
+curl -s -X POST "http://127.0.0.1:8000/v1/projects/$PROJECT_ID/runs" \
+  -H "Content-Type: application/json" -d '{"until": 36900, "seed": 42}'
+```
+
+To replay a run you didn't seed, read its `seed` from `GET /v1/runs/{id}` and resubmit with
+it. Compare scenarios by using the same seed on both, so differences come from your change and
+not from random draws. Reproducibility holds for a given version of spur.
 
 ## Project shape
 

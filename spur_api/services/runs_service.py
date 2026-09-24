@@ -6,6 +6,7 @@ enqueues jobs, never builds or runs a `Model` itself, keeping the request
 path fast regardless of how long a run takes.
 """
 
+import secrets
 from uuid import UUID
 
 from arq import ArqRedis
@@ -16,7 +17,7 @@ from spur.core.event import SimEvent, SimEventType
 
 from spur_api.db.models import ProjectRow, RunEventRow, SimulationRunRow
 from spur_api.exceptions import NotFoundError
-from spur_api.schemas.run import Run, RunStatus
+from spur_api.schemas.run import MAX_SEED, Run, RunStatus
 
 
 def _to_schema(row: SimulationRunRow) -> Run:
@@ -29,13 +30,22 @@ async def submit_run(
     project_id: UUID,
     until: int | None,
     chunk_size: int | None,
+    seed: int | None = None,
 ) -> Run:
     project_row = await db.get(ProjectRow, project_id)
     if project_row is None:
         raise NotFoundError(f"Project {project_id} not found")
 
+    if seed is None:
+        # Always record a seed, even when the caller didn't ask for one, so
+        # any run can be replayed exactly by resubmitting with it.
+        seed = secrets.randbelow(MAX_SEED + 1)
+
     run_row = SimulationRunRow(
-        project_id=project_id, requested_until=until, chunk_size=chunk_size
+        project_id=project_id,
+        requested_until=until,
+        chunk_size=chunk_size,
+        seed=seed,
     )
     db.add(run_row)
     await db.commit()

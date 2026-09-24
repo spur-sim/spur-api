@@ -21,7 +21,12 @@ async def submit_run(
     redis: ArqRedis = Depends(get_redis),
 ) -> Run:
     return await runs_service.submit_run(
-        db, redis, project_id, until=body.until, chunk_size=body.chunk_size
+        db,
+        redis,
+        project_id,
+        until=body.until,
+        chunk_size=body.chunk_size,
+        seed=body.seed,
     )
 
 

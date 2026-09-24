@@ -3,8 +3,6 @@ and cancellation behavior can be tested independent of the persistence
 layer built on top of it in spur_api/worker/tasks.py.
 """
 
-import random
-
 from spur_api.worker.runner import SpurRunner
 
 
@@ -26,18 +24,11 @@ async def test_chunked_run_matches_single_shot_event_count(line4_project_dict):
     async def never_cancelled():
         return False
 
-    # This fixture's components include a DisruptionJitter (see
-    # test_components.json's Bayview North station), which draws from
-    # Python's global `random` module - spur's jitter is unseeded (a
-    # known, documented gap - see spur's plan.md), so two separate model
-    # runs over a long enough horizon can realize different delays and
-    # therefore different event counts, purely from RNG divergence, not
-    # from any chunking bug. Seeding identically before each run isolates
-    # what this test actually checks: that chunking a run into several
-    # `model.run(until=...)` calls produces byte-identical output to one
-    # single-call run, given the same random draws.
-    random.seed(12345)
-    runner = SpurRunner(project, until=3600, chunk_size=360)
+    # The fixture includes a DisruptionJitter, so without a seed two runs
+    # can differ purely from random draws. Giving both the same seed
+    # isolates what this test checks: that chunking a run into several
+    # `model.run(until=...)` calls gives identical output to a single call.
+    runner = SpurRunner(project, until=3600, chunk_size=360, seed=12345)
     outcome = await runner.run(on_chunk=on_chunk, is_cancelled=never_cancelled)
 
     assert outcome == "completed"
@@ -53,9 +44,10 @@ async def test_chunked_run_matches_single_shot_event_count(line4_project_dict):
     # single-call model.run(), matching Phase 1's in-process behaviour.
     from spur.core.model import Model
 
-    random.seed(12345)
     reference_events = []
-    m = Model.from_project_dictionary(project, event_sink=reference_events.append)
+    m = Model.from_project_dictionary(
+        project, event_sink=reference_events.append, seed=12345
+    )
     m.start()
     m.run(until=3600)
     m.log_current_state()
@@ -97,3 +89,26 @@ async def test_derives_until_from_tour_deletion_times(line4_project_dict):
     await runner.run(on_chunk=on_chunk, is_cancelled=never_cancelled)
 
     assert seen_final_time == max_deletion_time
+
+
+async def test_same_seed_reproduces_a_full_day_run_and_different_seed_differs(
+    line4_project_dict,
+):
+    project = _project_dict(line4_project_dict)
+
+    async def run(seed):
+        events = []
+
+        async def on_chunk(sim_time_now, batch):
+            events.extend(e.model_dump() for e in batch)
+
+        async def never_cancelled():
+            return False
+
+        await SpurRunner(project, until=36900, seed=seed).run(
+            on_chunk=on_chunk, is_cancelled=never_cancelled
+        )
+        return events
+
+    assert await run(7) == await run(7)
+    assert await run(7) != await run(8)
