@@ -1,7 +1,10 @@
+import re
+
 import pytest
 
 from spur_api.auth import key_fingerprint
 from spur_api.config import settings
+from spur_api.main import create_app
 
 
 @pytest.fixture
@@ -34,24 +37,37 @@ async def test_valid_key_is_accepted(client, auth_on):
     assert resp.status_code == 200
 
 
-async def test_every_non_health_route_requires_auth(client, auth_on):
+OPEN_ROUTES = {"/healthz", "/readyz"}
+
+
+def _api_routes():
+    """Every (method, path) the app serves, with path parameters filled in.
+    Read from the app's own OpenAPI schema, so a new route can't be left out."""
     rid = "00000000-0000-0000-0000-000000000000"
-    calls = [
-        ("get", "/v1/projects"),
-        ("post", "/v1/projects"),
-        ("get", f"/v1/projects/{rid}"),
-        ("put", f"/v1/projects/{rid}"),
-        ("delete", f"/v1/projects/{rid}"),
-        ("post", f"/v1/projects/{rid}/runs"),
-        ("get", "/v1/runs"),
-        ("get", f"/v1/runs/{rid}"),
-        ("post", f"/v1/runs/{rid}/cancel"),
-        ("delete", f"/v1/runs/{rid}"),
-        ("get", f"/v1/runs/{rid}/events"),
-    ]
-    for method, path in calls:
-        resp = await getattr(client, method)(path)
-        assert resp.status_code == 401, f"{method.upper()} {path} not protected"
+    calls = []
+    for path, operations in create_app().openapi()["paths"].items():
+        if path in OPEN_ROUTES:
+            continue
+        for method in operations:
+            calls.append((method.upper(), re.sub(r"\{[^}]+\}", rid, path)))
+    return calls
+
+
+def test_the_route_enumeration_is_not_vacuous():
+    calls = _api_routes()
+    assert len(calls) >= 15
+    for expected in [
+        ("POST", "/v1/validate"),
+        ("GET", "/v1/catalog"),
+        ("GET", "/v1/runs/00000000-0000-0000-0000-000000000000/summary"),
+    ]:
+        assert expected in calls
+
+
+@pytest.mark.parametrize("method,path", _api_routes())
+async def test_every_non_health_route_requires_auth(client, auth_on, method, path):
+    resp = await client.request(method, path)
+    assert resp.status_code == 401, f"{method} {path} is not protected"
 
 
 async def test_health_endpoints_stay_open(client, auth_on):

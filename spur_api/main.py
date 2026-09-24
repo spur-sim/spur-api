@@ -15,7 +15,7 @@ from spur_api.exceptions import (
     RunAnalysisError,
     RunNotReadyError,
 )
-from spur_api.routers import health, projects, runs, validate
+from spur_api.routers import catalog, health, projects, runs, validate
 
 
 @asynccontextmanager
@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(projects.router, dependencies=[Depends(current_principal)])
     app.include_router(runs.router, dependencies=[Depends(current_principal)])
     app.include_router(validate.router, dependencies=[Depends(current_principal)])
+    app.include_router(catalog.router, dependencies=[Depends(current_principal)])
 
     @app.exception_handler(NotFoundError)
     def _not_found(request: Request, exc: NotFoundError):

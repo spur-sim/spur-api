@@ -183,6 +183,10 @@ recorded as a short hash of the key that created it, never the key itself.
   Only list origins you control; `["*"]` is for local experiments. Alternatively, serve the
   app and the API from one origin behind a reverse proxy and you don't need this at all.
   Clients authenticate with the bearer header, not cookies.
+- **What can go in a project?** `GET /v1/catalog` lists every component, jitter and collection
+  type, with each parameter's `name`, `type` (`integer`, `number`, `string` or `boolean`),
+  `required`, `default` and `description`. It is built from spur itself, so it always matches
+  what a project can use. Pair it with `POST /v1/validate` to check what the user has built.
 - **Listing projects** (`GET /v1/projects`) returns lightweight summaries (id, name,
   timestamps, and counts of components/routes/tours/trains), newest first, with
   `limit`/`offset`. Fetch `GET /v1/projects/{id}` for the full spec.
