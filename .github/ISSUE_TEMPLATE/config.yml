@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question about modelling or the engine
+    url: https://github.com/spur-sim/spur/discussions
+    about: Ask how to model something, or float an idea. The API service has no discussions board of its own.
+  - name: Problem with the simulation engine (spur)
+    url: https://github.com/spur-sim/spur/issues/new/choose
+    about: Components, agents, jitter, or how trains behave in a simulation belong in the spur repository. This repository is for the HTTP service around it.
