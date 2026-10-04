@@ -11,7 +11,7 @@ services:
     volumes:
       - spur_api_postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U spur"]
+      test: ["CMD-SHELL", "pg_isready -U spur -d spur_api"]
       interval: 5s
       timeout: 5s
       retries: 10
