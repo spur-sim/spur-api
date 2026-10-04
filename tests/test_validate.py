@@ -151,8 +151,10 @@ class TestAgreementWithSaving:
     @pytest.mark.parametrize(
         "mutation",
         [lambda p: p.pop("trains"), lambda p: p.pop("type"), lambda p: p.pop("spur_version"),
-         lambda p: p["components"][0].pop("u")],
-        ids=["missing section", "missing type", "missing version", "bad component"],
+         lambda p: p["components"][0].pop("u"),
+         lambda p: p.__setitem__("extensions", ["not", "an", "object"])],
+        ids=["missing section", "missing type", "missing version", "bad component",
+             "bad extensions"],
     )
     async def test_what_saving_rejects_is_never_valid(
         self, client, line4_project_dict, mutation
