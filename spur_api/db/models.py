@@ -32,6 +32,10 @@ class ProjectRow(Base):
     # `spur_version` are duplicated as their own columns for querying
     # without a JSON path expression; `spec` remains the source of truth.
     spec: Mapped[dict] = mapped_column(JSONB)
+    # Counts saves: 1 when created, one more each time the project is
+    # replaced. A client sends back the version it loaded so that a save
+    # made from a stale copy can be refused (see update_project).
+    version: Mapped[int] = mapped_column(default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime, server_default=func.now(), onupdate=func.now()
@@ -64,6 +68,10 @@ class SimulationRunRow(Base):
     # Nullable: runs from before this column existed fall back to the live
     # project.
     spec_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # The project's version when the run was submitted, so a client can tell
+    # whether the project has been edited since. Null for runs from before
+    # this column existed.
+    project_version: Mapped[int | None] = mapped_column(nullable=True)
     sim_time_now: Mapped[int | None] = mapped_column(nullable=True)
     arq_job_id: Mapped[str | None] = mapped_column(nullable=True)
     error_message: Mapped[str | None] = mapped_column(nullable=True)

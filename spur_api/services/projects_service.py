@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from spur_api.db.models import ProjectRow
-from spur_api.exceptions import NotFoundError
+from spur_api.exceptions import NotFoundError, StaleProjectError
 from spur_api.schemas.project import (
     Project,
     ProjectCounts,
@@ -15,7 +15,12 @@ from spur_api.schemas.project import (
 
 def _to_schema(row: ProjectRow) -> Project:
     return Project(
-        **row.spec, id=row.id, owner=row.owner, created_at=row.created_at, updated_at=row.updated_at
+        **row.spec,
+        id=row.id,
+        owner=row.owner,
+        version=row.version,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
 
 
@@ -85,11 +90,29 @@ async def list_projects(
 
 
 async def update_project(
-    db: AsyncSession, project_id: UUID, spec: ProjectCreate
+    db: AsyncSession,
+    project_id: UUID,
+    spec: ProjectCreate,
+    expected_version: int | None = None,
 ) -> Project:
-    row = await db.get(ProjectRow, project_id)
+    """Replace a project's spec.
+
+    With `expected_version`, the save goes ahead only if that is still the
+    project's version; otherwise someone else has saved since the caller
+    loaded it, and the save is refused rather than overwrite their work.
+    Without it the save always goes ahead.
+    """
+    # Locked so that two saves carrying the same version can't both pass the
+    # check: the second waits here and then sees the first one's new version.
+    row = await db.get(ProjectRow, project_id, with_for_update=True)
     if row is None:
         raise NotFoundError(f"Project {project_id} not found")
+    if expected_version is not None and expected_version != row.version:
+        raise StaleProjectError(
+            f"Project {project_id} is at version {row.version}, not {expected_version}",
+            version=row.version,
+        )
+    row.version += 1
     row.name = spec.name
     row.spur_version = spec.spur_version
     row.spec = spec.model_dump(exclude_unset=True)

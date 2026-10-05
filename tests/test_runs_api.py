@@ -299,3 +299,17 @@ async def test_renaming_rejects_a_missing_run_and_an_overlong_name(client, line4
     assert too_long.status_code == 422
     # The body must say what the name is to be, even if that is null.
     assert (await client.patch(f"/v1/runs/{run['id']}", json={})).status_code == 422
+
+
+async def test_a_run_records_the_project_version_it_ran(client, line4_project_dict):
+    project_id = await _create_project(client, line4_project_dict)
+
+    before = await client.post(f"/v1/projects/{project_id}/runs", json={"until": 100})
+    await client.put(f"/v1/projects/{project_id}", json=line4_project_dict)
+    after = await client.post(f"/v1/projects/{project_id}/runs", json={"until": 100})
+
+    assert before.json()["project_version"] == 1
+    assert after.json()["project_version"] == 2
+    # The earlier run still says what it ran, so it can be seen to be out of date.
+    earlier = await client.get(f"/v1/runs/{before.json()['id']}")
+    assert earlier.json()["project_version"] == 1

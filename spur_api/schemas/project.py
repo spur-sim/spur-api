@@ -29,6 +29,9 @@ class Project(ProjectSpec):
 
     id: UUID = Field(default_factory=uuid4)
     owner: str | None = None
+    # 1 when created, one more each time the project is replaced. Send it
+    # back as `If-Match` on `PUT` to have a save from a stale copy refused.
+    version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

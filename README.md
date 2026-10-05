@@ -211,6 +211,12 @@ recorded as a short hash of the key that created it, never the key itself.
 - **Listing projects** (`GET /v1/projects`) returns lightweight summaries (id, name,
   timestamps, and counts of components/routes/tours/trains), newest first, with
   `limit`/`offset`. Fetch `GET /v1/projects/{id}` for the full spec.
+- **Saving without overwriting.** A project has a `version`: 1 when created, one more each
+  time it is replaced. Send the version you loaded as `If-Match` on `PUT /v1/projects/{id}`.
+  If someone else has saved since, the API answers 412 with the current `version` and changes
+  nothing, so two browser tabs can't silently overwrite each other. Without `If-Match` a save
+  always goes ahead. Each run records the `project_version` it was submitted at, so a run is
+  out of date when that is lower than the project's current `version`.
 - **Progress.** A run reports `sim_time_now` and `until_target`, so progress is
   `sim_time_now / until_target`. `until_target` is set as soon as the run is submitted:
   the `until` you asked for, or otherwise the latest tour end time in the project.

@@ -128,3 +128,45 @@ async def test_a_project_with_extensions_still_runs(client, line4_project_dict):
 
     resp = await client.post(f"/v1/projects/{created['id']}/runs", json={"until": 100})
     assert resp.status_code == 202
+
+
+async def test_each_save_raises_the_version(client, line4_project_dict):
+    created = (await client.post("/v1/projects", json=line4_project_dict)).json()
+    assert created["version"] == 1
+
+    saved = await client.put(f"/v1/projects/{created['id']}", json=line4_project_dict)
+    assert saved.json()["version"] == 2
+    assert (await client.get(f"/v1/projects/{created['id']}")).json()["version"] == 2
+
+
+async def test_a_save_from_a_stale_copy_is_refused(client, line4_project_dict):
+    project_id = (await client.post("/v1/projects", json=line4_project_dict)).json()["id"]
+    url = f"/v1/projects/{project_id}"
+    mine = {**line4_project_dict, "name": "Mine"}
+    theirs = {**line4_project_dict, "name": "Theirs"}
+
+    # Two tabs load version 1. The first to save wins.
+    first = await client.put(url, json=theirs, headers={"If-Match": "1"})
+    assert first.status_code == 200
+    second = await client.put(url, json=mine, headers={"If-Match": "1"})
+
+    assert second.status_code == 412
+    # The refusal says where the project is now, and nothing was overwritten.
+    assert second.json()["version"] == 2
+    assert (await client.get(url)).json()["name"] == "Theirs"
+
+    # Saving again from the current version goes through.
+    retry = await client.put(url, json=mine, headers={"If-Match": "2"})
+    assert retry.status_code == 200
+    assert retry.json()["version"] == 3
+
+
+async def test_if_match_may_be_quoted_and_must_be_a_version(client, line4_project_dict):
+    project_id = (await client.post("/v1/projects", json=line4_project_dict)).json()["id"]
+    url = f"/v1/projects/{project_id}"
+
+    quoted = await client.put(url, json=line4_project_dict, headers={"If-Match": '"1"'})
+    assert quoted.status_code == 200
+
+    nonsense = await client.put(url, json=line4_project_dict, headers={"If-Match": "latest"})
+    assert nonsense.status_code == 400
