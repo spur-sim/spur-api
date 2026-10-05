@@ -50,6 +50,7 @@ async def submit_run(
     until: int | None,
     chunk_size: int | None,
     seed: int | None = None,
+    name: str | None = None,
 ) -> Run:
     project_row = await db.get(ProjectRow, project_id)
     if project_row is None:
@@ -72,6 +73,7 @@ async def submit_run(
 
     run_row = SimulationRunRow(
         project_id=project_id,
+        name=name,
         requested_until=until,
         until_target=until if until is not None else derive_until(project_row.spec),
         chunk_size=chunk_size,
@@ -106,6 +108,16 @@ async def list_runs(
         stmt = stmt.where(SimulationRunRow.status == status)
     result = await db.execute(stmt)
     return [_to_schema(r) for r in result.scalars().all()]
+
+
+async def rename_run(db: AsyncSession, run_id: UUID, name: str | None) -> Run:
+    row = await db.get(SimulationRunRow, run_id)
+    if row is None:
+        raise NotFoundError(f"Run {run_id} not found")
+    row.name = name
+    await db.commit()
+    await db.refresh(row)
+    return _to_schema(row)
 
 
 async def delete_run(db: AsyncSession, run_id: UUID) -> None:

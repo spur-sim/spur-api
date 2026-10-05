@@ -89,6 +89,22 @@ To replay a run you didn't seed, read its `seed` from `GET /v1/runs/{id}` and re
 it. Compare scenarios by using the same seed on both, so differences come from your change and
 not from random draws. Reproducibility holds for a given version of spur.
 
+## Naming runs
+
+A run can carry a `name`, so that it can be told from others of the same project. Give one
+when submitting, or set, change or remove it afterwards:
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/v1/projects/$PROJECT_ID/runs" \
+  -H "Content-Type: application/json" -d '{"name": "Baseline, new timetable"}'
+
+curl -s -X PATCH "http://127.0.0.1:8000/v1/runs/$RUN_ID" \
+  -H "Content-Type: application/json" -d '{"name": "Baseline"}'
+```
+
+Names are optional, need not be unique, and are at most 200 characters. A null or blank name
+removes it; a run without one is known by when it was submitted and its seed.
+
 ## Validating a project
 
 `POST /v1/validate` checks a project without saving it and reports **every** problem at

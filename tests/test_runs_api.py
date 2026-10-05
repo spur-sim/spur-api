@@ -253,3 +253,49 @@ async def test_runs_without_until_target_still_run(
     done = (await client.get(f"/v1/runs/{run['id']}")).json()
     assert done["status"] == "completed" and done["sim_time_now"] == 3600
     assert done["until_target"] is None
+
+
+async def test_a_run_is_unnamed_unless_given_a_name(client, line4_project_dict):
+    project_id = await _create_project(client, line4_project_dict)
+
+    unnamed = await client.post(f"/v1/projects/{project_id}/runs", json={"until": 100})
+    named = await client.post(
+        f"/v1/projects/{project_id}/runs", json={"until": 100, "name": "  Baseline  "}
+    )
+
+    assert unnamed.json()["name"] is None
+    # Padding is trimmed.
+    assert named.json()["name"] == "Baseline"
+    fetched = await client.get(f"/v1/runs/{named.json()['id']}")
+    assert fetched.json()["name"] == "Baseline"
+
+
+async def test_a_run_can_be_renamed_and_have_its_name_removed(client, line4_project_dict):
+    project_id = await _create_project(client, line4_project_dict)
+    run = (await client.post(f"/v1/projects/{project_id}/runs", json={"until": 100})).json()
+
+    renamed = await client.patch(f"/v1/runs/{run['id']}", json={"name": "New timetable"})
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "New timetable"
+    # Nothing else about the run changes.
+    assert renamed.json()["seed"] == run["seed"]
+    assert (await client.get(f"/v1/runs/{run['id']}")).json()["name"] == "New timetable"
+
+    # A blank name is no name.
+    cleared = await client.patch(f"/v1/runs/{run['id']}", json={"name": "   "})
+    assert cleared.json()["name"] is None
+
+
+async def test_renaming_rejects_a_missing_run_and_an_overlong_name(client, line4_project_dict):
+    project_id = await _create_project(client, line4_project_dict)
+    run = (await client.post(f"/v1/projects/{project_id}/runs", json={"until": 100})).json()
+
+    missing = await client.patch(
+        "/v1/runs/00000000-0000-4000-8000-000000000000", json={"name": "x"}
+    )
+    assert missing.status_code == 404
+
+    too_long = await client.patch(f"/v1/runs/{run['id']}", json={"name": "x" * 201})
+    assert too_long.status_code == 422
+    # The body must say what the name is to be, even if that is null.
+    assert (await client.patch(f"/v1/runs/{run['id']}", json={})).status_code == 422

@@ -2,13 +2,34 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import BaseModel, BeforeValidator, Field
 
 from spur.analysis import ComponentStats, RunStats, TrainStats
 
 # numpy's default_rng accepts any non-negative integer; the DB column is a
 # signed 64-bit BigInteger.
 MAX_SEED = 2**63 - 1
+
+
+MAX_RUN_NAME_LENGTH = 200
+
+
+def _blank_is_none(value):
+    # A name of only spaces is no name. Trimming happens here, before the
+    # length check, so padding doesn't count against the limit.
+    if isinstance(value, str):
+        return value.strip() or None
+    return value
+
+
+# What a person calls a run ("Baseline, new timetable"). Optional: a run
+# without one is known by when it was submitted and its seed.
+RunName = Annotated[
+    Annotated[str, Field(max_length=MAX_RUN_NAME_LENGTH)] | None,
+    BeforeValidator(_blank_is_none),
+]
 
 
 class RunStatus(str, Enum):
@@ -33,11 +54,19 @@ class RunCreate(BaseModel):
     # server picks one and records it on the run, so any run can be
     # replayed later by resubmitting with that seed.
     seed: int | None = Field(default=None, ge=0, le=MAX_SEED)
+    name: RunName = None
+
+
+class RunUpdate(BaseModel):
+    """Request body for renaming a run. A null or blank name removes it."""
+
+    name: RunName
 
 
 class Run(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     project_id: UUID
+    name: str | None = None
     status: RunStatus = RunStatus.QUEUED
     requested_until: int | None = None
     until_target: int | None = None
