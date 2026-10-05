@@ -88,3 +88,43 @@ async def test_summary_counts_reflect_an_update(client, line4_project_dict):
     (item,) = (await client.get("/v1/projects")).json()
     assert item["counts"]["trains"] == 0
     assert item["counts"]["components"] == len(line4_project_dict["components"])
+
+
+async def test_extensions_are_kept_exactly_as_given(client, line4_project_dict):
+    # Data a tool keeps with a project (spur's `extensions` section). The API
+    # stores and returns it without looking inside.
+    extensions = {
+        "ui": {"version": 1, "nodes": [{"id": "yonge-east", "lonlat": [-79.41, 43.76]}]},
+        "other-tool": {"anything": None},
+    }
+    resp = await client.post(
+        "/v1/projects", json=dict(line4_project_dict, extensions=extensions)
+    )
+    assert resp.status_code == 201
+    created = resp.json()
+    assert created["extensions"] == extensions
+
+    resp = await client.get(f"/v1/projects/{created['id']}")
+    assert resp.json()["extensions"] == extensions
+
+    moved = {"ui": {"version": 1, "nodes": []}}
+    resp = await client.put(
+        f"/v1/projects/{created['id']}", json=dict(line4_project_dict, extensions=moved)
+    )
+    assert resp.status_code == 200
+    assert resp.json()["extensions"] == moved
+
+
+async def test_extensions_must_be_an_object(client, line4_project_dict):
+    resp = await client.post(
+        "/v1/projects", json=dict(line4_project_dict, extensions=["not", "an", "object"])
+    )
+    assert resp.status_code == 422
+
+
+async def test_a_project_with_extensions_still_runs(client, line4_project_dict):
+    project = dict(line4_project_dict, extensions={"ui": {"nodes": "any shape at all"}})
+    created = (await client.post("/v1/projects", json=project)).json()
+
+    resp = await client.post(f"/v1/projects/{created['id']}/runs", json={"until": 100})
+    assert resp.status_code == 202

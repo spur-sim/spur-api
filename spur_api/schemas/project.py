@@ -9,7 +9,7 @@ not a reinvented resource model.
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -61,3 +61,4 @@ class ProjectEnvelope(BaseModel):
     type: Literal["SpurProject"]
     spur_version: str
     name: Optional[str] = None
+    extensions: Optional[Dict[str, Any]] = None

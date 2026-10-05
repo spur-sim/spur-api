@@ -158,6 +158,11 @@ API-owned metadata (`id`, `owner`, timestamps) - see `spur_api/schemas/project.p
 deliberately not a divergent resource model: anything valid for `spur.io.formats.read_project_json`
 is valid here.
 
+A project may also carry spur's optional `extensions` section: data a tool keeps with the
+project that the simulation has no use for, such as an editor's layout, keyed by a namespace
+of the tool's choosing. The API stores and returns it exactly as given and never looks inside;
+the only check is that it is a JSON object.
+
 ## Authentication
 
 Off by default. To require an API key on every endpoint except `/healthz` and `/readyz`:
