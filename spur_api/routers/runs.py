@@ -8,7 +8,7 @@ from spur.analysis import Visit
 from spur.core.event import SimEvent, SimEventType
 
 from spur_api.deps import get_db, get_redis
-from spur_api.schemas.run import Run, RunCreate, RunStatus, RunSummary
+from spur_api.schemas.run import Run, RunCreate, RunStatus, RunSummary, RunUpdate
 from spur_api.services import runs_service
 
 router = APIRouter(tags=["runs"])
@@ -28,6 +28,7 @@ async def submit_run(
         until=body.until,
         chunk_size=body.chunk_size,
         seed=body.seed,
+        name=body.name,
     )
 
 
@@ -43,6 +44,13 @@ async def list_runs(
     db: AsyncSession = Depends(get_db),
 ) -> list[Run]:
     return await runs_service.list_runs(db, project_id=project_id, status=status)
+
+
+@router.patch("/v1/runs/{run_id}")
+async def rename_run(
+    run_id: UUID, body: RunUpdate, db: AsyncSession = Depends(get_db)
+) -> Run:
+    return await runs_service.rename_run(db, run_id, body.name)
 
 
 @router.post("/v1/runs/{run_id}/cancel")

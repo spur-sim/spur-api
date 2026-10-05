@@ -48,6 +48,8 @@ class SimulationRunRow(Base):
         ForeignKey("projects.id", ondelete="CASCADE")
     )
     status: Mapped[RunStatus] = mapped_column(default=RunStatus.QUEUED)
+    # What a person calls the run. Null when it was never named.
+    name: Mapped[str | None] = mapped_column(nullable=True)
     requested_until: Mapped[int | None] = mapped_column(nullable=True)
     # The simulation time the run will go to: requested_until if given, else
     # derived from the project's tours when the run was submitted. Lets a
