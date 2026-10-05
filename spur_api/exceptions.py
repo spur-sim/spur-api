@@ -6,6 +6,17 @@ class NotFoundError(SpurApiError):
     """A requested resource (project, run, ...) does not exist."""
 
 
+class StaleProjectError(SpurApiError):
+    """A project was saved from a copy that is no longer the latest.
+
+    `version` is the project's current version.
+    """
+
+    def __init__(self, message: str, version: int) -> None:
+        super().__init__(message)
+        self.version = version
+
+
 class InvalidProjectError(SpurApiError):
     """A project spec failed spur's own validation."""
 

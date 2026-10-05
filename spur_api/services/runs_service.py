@@ -79,6 +79,7 @@ async def submit_run(
         chunk_size=chunk_size,
         seed=seed,
         spec_snapshot=project_row.spec,
+        project_version=project_row.version,
     )
     db.add(run_row)
     await db.commit()

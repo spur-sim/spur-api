@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from spur_api.auth import Principal, current_principal
@@ -9,6 +9,18 @@ from spur_api.schemas.project import Project, ProjectCreate, ProjectSummary, Pro
 from spur_api.services import projects_service
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
+
+
+def _version_from(if_match: str | None) -> int | None:
+    """The version in an `If-Match` header, given bare or as a quoted ETag."""
+    if if_match is None:
+        return None
+    try:
+        return int(if_match.strip().strip('"'))
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="If-Match must be a project version, such as 3"
+        ) from None
 
 
 @router.post("", status_code=201)
@@ -41,9 +53,19 @@ async def get_project(
 async def update_project(
     project_id: UUID,
     body: ProjectUpdate,
+    if_match: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> Project:
-    return await projects_service.update_project(db, project_id, body)
+    """Replace a project. Each save raises its `version` by one.
+
+    Send the version you loaded as `If-Match` and the save is refused with
+    412 if the project has been saved by someone else since; the response
+    gives the current `version`. Without `If-Match` the save always goes
+    ahead.
+    """
+    return await projects_service.update_project(
+        db, project_id, body, expected_version=_version_from(if_match)
+    )
 
 
 @router.delete("/{project_id}", status_code=204)

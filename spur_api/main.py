@@ -14,6 +14,7 @@ from spur_api.exceptions import (
     ProjectInvalidError,
     RunAnalysisError,
     RunNotReadyError,
+    StaleProjectError,
 )
 from spur_api.routers import catalog, health, projects, runs, validate
 
@@ -50,6 +51,13 @@ def create_app() -> FastAPI:
     @app.exception_handler(NotFoundError)
     def _not_found(request: Request, exc: NotFoundError):
         return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(StaleProjectError)
+    def _stale_project(request: Request, exc: StaleProjectError):
+        # 412: the request's If-Match precondition did not hold.
+        return JSONResponse(
+            status_code=412, content={"detail": str(exc), "version": exc.version}
+        )
 
     @app.exception_handler(InvalidProjectError)
     def _invalid_project(request: Request, exc: InvalidProjectError):
