@@ -36,6 +36,11 @@ class ProjectRow(Base):
     # replaced. A client sends back the version it loaded so that a save
     # made from a stale copy can be refused (see update_project).
     version: Mapped[int] = mapped_column(default=1, server_default="1")
+    # The version at which what a simulation reads (components, routes,
+    # tours, trains) last changed. A save that only renames the project or
+    # changes `extensions` raises `version` but not this, so a run made
+    # since is still a run of the project as it stands.
+    inputs_version: Mapped[int] = mapped_column(default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime, server_default=func.now(), onupdate=func.now()

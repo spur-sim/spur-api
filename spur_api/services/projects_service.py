@@ -13,12 +13,18 @@ from spur_api.schemas.project import (
 )
 
 
+# The sections of a project that a simulation reads. The rest (its name,
+# `extensions`) can change without changing what a run would produce.
+_SIMULATION_INPUTS = ("components", "routes", "tours", "trains")
+
+
 def _to_schema(row: ProjectRow) -> Project:
     return Project(
         **row.spec,
         id=row.id,
         owner=row.owner,
         version=row.version,
+        inputs_version=row.inputs_version,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -113,9 +119,12 @@ async def update_project(
             version=row.version,
         )
     row.version += 1
+    new_spec = spec.model_dump(exclude_unset=True)
+    if any(new_spec.get(s) != row.spec.get(s) for s in _SIMULATION_INPUTS):
+        row.inputs_version = row.version
     row.name = spec.name
     row.spur_version = spec.spur_version
-    row.spec = spec.model_dump(exclude_unset=True)
+    row.spec = new_spec
     await db.commit()
     await db.refresh(row)
     return _to_schema(row)

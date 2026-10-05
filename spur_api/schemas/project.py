@@ -32,6 +32,11 @@ class Project(ProjectSpec):
     # 1 when created, one more each time the project is replaced. Send it
     # back as `If-Match` on `PUT` to have a save from a stale copy refused.
     version: int = 1
+    # The version at which the components, routes, tours or trains last
+    # changed. A run whose `project_version` is lower than this was made
+    # before that change, so its results describe an earlier state. Saves
+    # that touch only the name or `extensions` leave it alone.
+    inputs_version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
