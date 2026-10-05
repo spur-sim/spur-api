@@ -67,9 +67,10 @@ class Run(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     project_id: UUID
     name: str | None = None
-    # The project's `version` when the run was submitted. If the project's
-    # version is higher now, it has been edited since and the run's results
-    # describe the earlier state. Null for runs made before versions existed.
+    # The project's `version` when the run was submitted. If it is lower
+    # than the project's `inputs_version`, what the simulation reads has
+    # been edited since and the run's results describe the earlier state.
+    # Null for runs made before versions existed.
     project_version: int | None = None
     status: RunStatus = RunStatus.QUEUED
     requested_until: int | None = None

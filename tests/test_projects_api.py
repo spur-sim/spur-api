@@ -170,3 +170,30 @@ async def test_if_match_may_be_quoted_and_must_be_a_version(client, line4_projec
 
     nonsense = await client.put(url, json=line4_project_dict, headers={"If-Match": "latest"})
     assert nonsense.status_code == 400
+
+
+async def test_inputs_version_moves_only_when_the_simulation_inputs_change(
+    client, line4_project_dict
+):
+    created = (await client.post("/v1/projects", json=line4_project_dict)).json()
+    url = f"/v1/projects/{created['id']}"
+    assert created["inputs_version"] == 1
+
+    # A new name and a tidied layout change nothing a simulation reads.
+    cosmetic = {
+        **line4_project_dict,
+        "name": "Renamed",
+        "extensions": {"ui": {"nodes": [{"id": "a", "xy": [1, 2]}]}},
+    }
+    saved = (await client.put(url, json=cosmetic)).json()
+    assert (saved["version"], saved["inputs_version"]) == (2, 1)
+
+    # Saving the same thing again doesn't either.
+    saved = (await client.put(url, json=cosmetic)).json()
+    assert (saved["version"], saved["inputs_version"]) == (3, 1)
+
+    # Dropping a train does.
+    fewer = {**cosmetic, "trains": cosmetic["trains"][:-1]}
+    saved = (await client.put(url, json=fewer)).json()
+    assert (saved["version"], saved["inputs_version"]) == (4, 4)
+    assert (await client.get(url)).json()["inputs_version"] == 4

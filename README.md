@@ -215,8 +215,10 @@ recorded as a short hash of the key that created it, never the key itself.
   time it is replaced. Send the version you loaded as `If-Match` on `PUT /v1/projects/{id}`.
   If someone else has saved since, the API answers 412 with the current `version` and changes
   nothing, so two browser tabs can't silently overwrite each other. Without `If-Match` a save
-  always goes ahead. Each run records the `project_version` it was submitted at, so a run is
-  out of date when that is lower than the project's current `version`.
+  always goes ahead. Each run records the `project_version` it was submitted at. A project
+  also has an `inputs_version`: the version at which its components, routes, tours or trains
+  last changed. A run is out of date when its `project_version` is lower than that; saves that
+  change only the name or `extensions` (a tidied layout, say) don't make runs out of date.
 - **Progress.** A run reports `sim_time_now` and `until_target`, so progress is
   `sim_time_now / until_target`. `until_target` is set as soon as the run is submitted:
   the `until` you asked for, or otherwise the latest tour end time in the project.
