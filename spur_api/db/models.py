@@ -67,6 +67,11 @@ class SimulationRunRow(Base):
     until_target: Mapped[int | None] = mapped_column(nullable=True)
     chunk_size: Mapped[int | None] = mapped_column(nullable=True)
     seed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Shared by the runs of one submission that asked for several seeds, so
+    # they can be found and read together. Null for a run made on its own.
+    batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True, index=True
+    )
     # A copy of the project spec taken when the run was submitted. Delays are
     # measured against the schedule, and a project can be edited after a run,
     # so the run's events must be analysed against what it actually ran.

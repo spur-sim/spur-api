@@ -43,6 +43,10 @@ services:
   worker:
     build: .
     command: arq spur_api.worker.settings.WorkerSettings
+    # Each worker runs one simulation at a time, so this is how many runs
+    # go at once. A batch of seeds finishes that many times sooner.
+    deploy:
+      replicas: 4
     environment:
       SPUR_API_DATABASE_URL: postgresql+asyncpg://spur:spur@postgres:5432/spur_api
       SPUR_API_REDIS_URL: redis://redis:6379/0

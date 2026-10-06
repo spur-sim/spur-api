@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 
 from spur.analysis import ComponentStats, RunStats, TrainStats
 
@@ -12,6 +12,9 @@ from spur.analysis import ComponentStats, RunStats, TrainStats
 # signed 64-bit BigInteger.
 MAX_SEED = 2**63 - 1
 
+
+# How many runs one submission can ask for.
+MAX_SEEDS = 100
 
 MAX_RUN_NAME_LENGTH = 200
 
@@ -54,7 +57,19 @@ class RunCreate(BaseModel):
     # server picks one and records it on the run, so any run can be
     # replayed later by resubmitting with that seed.
     seed: int | None = Field(default=None, ge=0, le=MAX_SEED)
+    # How many runs to make. More than one makes a batch: runs that differ
+    # only in their seed, which counts up from `seed` (or from one the
+    # server picks), so the whole batch can be replayed from its first seed.
+    seeds: int = Field(default=1, ge=1, le=MAX_SEEDS)
     name: RunName = None
+
+    @model_validator(mode="after")
+    def _seeds_fit(self):
+        if self.seed is not None and self.seed + self.seeds - 1 > MAX_SEED:
+            raise ValueError(
+                f"seed is too large to count {self.seeds} seeds up from it"
+            )
+        return self
 
 
 class RunUpdate(BaseModel):
@@ -76,6 +91,9 @@ class Run(BaseModel):
     requested_until: int | None = None
     until_target: int | None = None
     seed: int | None = None
+    # Shared by the runs of one submission that asked for several seeds.
+    # Null for a run submitted on its own.
+    batch_id: UUID | None = None
     sim_time_now: int | None = None
     error_message: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

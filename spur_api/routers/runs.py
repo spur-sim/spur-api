@@ -28,6 +28,7 @@ async def submit_run(
         until=body.until,
         chunk_size=body.chunk_size,
         seed=body.seed,
+        seeds=body.seeds,
         name=body.name,
     )
 
@@ -41,9 +42,12 @@ async def get_run(run_id: UUID, db: AsyncSession = Depends(get_db)) -> Run:
 async def list_runs(
     project_id: UUID | None = None,
     status: RunStatus | None = None,
+    batch_id: UUID | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[Run]:
-    return await runs_service.list_runs(db, project_id=project_id, status=status)
+    return await runs_service.list_runs(
+        db, project_id=project_id, status=status, batch_id=batch_id
+    )
 
 
 @router.patch("/v1/runs/{run_id}")

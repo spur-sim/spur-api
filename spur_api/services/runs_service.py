@@ -7,7 +7,7 @@ path fast regardless of how long a run takes.
 """
 
 import secrets
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from arq import ArqRedis
 from sqlalchemy import select
@@ -51,7 +51,12 @@ async def submit_run(
     chunk_size: int | None,
     seed: int | None = None,
     name: str | None = None,
+    seeds: int = 1,
 ) -> Run:
+    """Queue a run, or a batch of `seeds` runs that differ only in seed.
+
+    Returns the first run. The rest of a batch share its `batch_id`.
+    """
     project_row = await db.get(ProjectRow, project_id)
     if project_row is None:
         raise NotFoundError(f"Project {project_id} not found")
@@ -69,27 +74,34 @@ async def submit_run(
     if seed is None:
         # Always record a seed, even when the caller didn't ask for one, so
         # any run can be replayed exactly by resubmitting with it.
-        seed = secrets.randbelow(MAX_SEED + 1)
+        seed = secrets.randbelow(MAX_SEED + 2 - seeds)
 
-    run_row = SimulationRunRow(
-        project_id=project_id,
-        name=name,
-        requested_until=until,
-        until_target=until if until is not None else derive_until(project_row.spec),
-        chunk_size=chunk_size,
-        seed=seed,
-        spec_snapshot=project_row.spec,
-        project_version=project_row.version,
-    )
-    db.add(run_row)
+    batch_id = uuid4() if seeds > 1 else None
+    until_target = until if until is not None else derive_until(project_row.spec)
+    run_rows = [
+        SimulationRunRow(
+            project_id=project_id,
+            name=name,
+            requested_until=until,
+            until_target=until_target,
+            chunk_size=chunk_size,
+            seed=seed + i,
+            batch_id=batch_id,
+            spec_snapshot=project_row.spec,
+            project_version=project_row.version,
+        )
+        for i in range(seeds)
+    ]
+    db.add_all(run_rows)
     await db.commit()
-    await db.refresh(run_row)
 
-    job = await redis.enqueue_job("run_simulation", str(run_row.id))
-    run_row.arq_job_id = job.job_id if job is not None else None
+    for run_row in run_rows:
+        await db.refresh(run_row)
+        job = await redis.enqueue_job("run_simulation", str(run_row.id))
+        run_row.arq_job_id = job.job_id if job is not None else None
     await db.commit()
-    await db.refresh(run_row)
-    return _to_schema(run_row)
+    await db.refresh(run_rows[0])
+    return _to_schema(run_rows[0])
 
 
 async def get_run(db: AsyncSession, run_id: UUID) -> Run:
@@ -100,13 +112,18 @@ async def get_run(db: AsyncSession, run_id: UUID) -> Run:
 
 
 async def list_runs(
-    db: AsyncSession, project_id: UUID | None, status: RunStatus | None
+    db: AsyncSession,
+    project_id: UUID | None,
+    status: RunStatus | None,
+    batch_id: UUID | None = None,
 ) -> list[Run]:
     stmt = select(SimulationRunRow)
     if project_id is not None:
         stmt = stmt.where(SimulationRunRow.project_id == project_id)
     if status is not None:
         stmt = stmt.where(SimulationRunRow.status == status)
+    if batch_id is not None:
+        stmt = stmt.where(SimulationRunRow.batch_id == batch_id)
     result = await db.execute(stmt)
     return [_to_schema(r) for r in result.scalars().all()]
 
