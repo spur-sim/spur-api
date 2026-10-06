@@ -313,3 +313,80 @@ async def test_a_run_records_the_project_version_it_ran(client, line4_project_di
     # The earlier run still says what it ran, so it can be seen to be out of date.
     earlier = await client.get(f"/v1/runs/{before.json()['id']}")
     assert earlier.json()["project_version"] == 1
+
+
+async def test_several_seeds_make_a_batch_of_runs(client, line4_project_dict):
+    project_id = await _create_project(client, line4_project_dict)
+
+    resp = await client.post(
+        f"/v1/projects/{project_id}/runs",
+        json={"until": 100, "seed": 40, "seeds": 3, "name": "Baseline"},
+    )
+    assert resp.status_code == 202
+    first = resp.json()
+    assert first["seed"] == 40
+    assert first["batch_id"] is not None
+
+    batch = (
+        await client.get("/v1/runs", params={"batch_id": first["batch_id"]})
+    ).json()
+    # Seeds count up from the first, and everything else is shared.
+    assert sorted(run["seed"] for run in batch) == [40, 41, 42]
+    assert {run["name"] for run in batch} == {"Baseline"}
+    assert {run["until_target"] for run in batch} == {100}
+    assert {run["project_id"] for run in batch} == {project_id}
+
+
+async def test_a_batch_without_a_seed_counts_up_from_a_chosen_one(
+    client, line4_project_dict
+):
+    project_id = await _create_project(client, line4_project_dict)
+    first = (
+        await client.post(f"/v1/projects/{project_id}/runs", json={"seeds": 4})
+    ).json()
+    batch = (
+        await client.get("/v1/runs", params={"batch_id": first["batch_id"]})
+    ).json()
+    seeds = sorted(run["seed"] for run in batch)
+    assert seeds == list(range(first["seed"], first["seed"] + 4))
+
+
+async def test_a_run_on_its_own_has_no_batch(client, line4_project_dict):
+    project_id = await _create_project(client, line4_project_dict)
+    run = (await client.post(f"/v1/projects/{project_id}/runs", json={})).json()
+    assert run["batch_id"] is None
+
+
+async def test_runs_of_a_batch_each_run_with_their_own_seed(
+    client, run_worker, line4_project_dict
+):
+    project_id = await _create_project(client, line4_project_dict)
+    first = (
+        await client.post(
+            f"/v1/projects/{project_id}/runs", json={"until": 36900, "seeds": 2}
+        )
+    ).json()
+    batch = (
+        await client.get("/v1/runs", params={"batch_id": first["batch_id"]})
+    ).json()
+
+    events = []
+    for run in batch:
+        await run_worker(run["id"])
+        done = (await client.get(f"/v1/runs/{run['id']}")).json()
+        assert done["status"] == "completed"
+        events.append(
+            (await client.get(f"/v1/runs/{run['id']}/events?limit=10000")).json()
+        )
+    assert events[0] != events[1]
+
+
+@pytest.mark.parametrize(
+    "body", [{"seeds": 0}, {"seeds": 101}, {"seed": 2**63 - 1, "seeds": 2}]
+)
+async def test_a_batch_that_cannot_be_made_is_rejected(
+    client, line4_project_dict, body
+):
+    project_id = await _create_project(client, line4_project_dict)
+    resp = await client.post(f"/v1/projects/{project_id}/runs", json=body)
+    assert resp.status_code == 422

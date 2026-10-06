@@ -89,6 +89,18 @@ To replay a run you didn't seed, read its `seed` from `GET /v1/runs/{id}` and re
 it. Compare scenarios by using the same seed on both, so differences come from your change and
 not from random draws. Reproducibility holds for a given version of spur.
 
+To see how variable a project is, ask for several runs at once with `seeds`:
+
+```bash
+curl -s -X POST localhost:8000/v1/projects/$PROJECT_ID/runs \
+  -H "Content-Type: application/json" -d '{"seeds": 20}'
+```
+
+That queues 20 runs that differ only in seed, counting up from `seed` (or from one the server
+picks), and returns the first. They share a `batch_id`; `GET /v1/runs?batch_id=...` lists them.
+A run submitted on its own has no `batch_id`. Each worker process runs one simulation at a
+time, so a batch finishes sooner with more workers (`docker-compose.yml` starts four).
+
 ## Naming runs
 
 A run can carry a `name`, so that it can be told from others of the same project. Give one
