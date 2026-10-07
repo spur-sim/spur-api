@@ -223,6 +223,11 @@ recorded as a short hash of the key that created it, never the key itself.
 - **Listing projects** (`GET /v1/projects`) returns lightweight summaries (id, name,
   timestamps, and counts of components/routes/tours/trains), newest first, with
   `limit`/`offset`. Fetch `GET /v1/projects/{id}` for the full spec.
+- **Scenarios.** `POST /v1/projects?base_project_id={id}` stores a project as a scenario of
+  another: an option to be compared with it. A scenario made from a scenario belongs to the same
+  base, so a family is one base and its scenarios. `GET /v1/projects?base_project_id={id}` lists
+  a base's scenarios, and every project carries its `base_project_id`. Deleting a base leaves its
+  scenarios as projects of their own.
 - **Saving without overwriting.** A project has a `version`: 1 when created, one more each
   time it is replaced. Send the version you loaded as `If-Match` on `PUT /v1/projects/{id}`.
   If someone else has saved since, the API answers 412 with the current `version` and changes

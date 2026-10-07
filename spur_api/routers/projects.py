@@ -26,20 +26,30 @@ def _version_from(if_match: str | None) -> int | None:
 @router.post("", status_code=201)
 async def create_project(
     body: ProjectCreate,
+    base_project_id: UUID | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     principal: Principal = Depends(current_principal),
 ) -> Project:
-    return await projects_service.create_project(db, body, owner=principal.id)
+    """Store a project. With `base_project_id` it is stored as a scenario
+    of that project: an option to be compared with it. A scenario made from
+    a scenario belongs to the same base."""
+    return await projects_service.create_project(
+        db, body, owner=principal.id, base_project_id=base_project_id
+    )
 
 
 @router.get("")
 async def list_projects(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    base_project_id: UUID | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> list[ProjectSummary]:
-    """Newest first. Returns summaries; fetch a project by id for its spec."""
-    return await projects_service.list_projects(db, limit=limit, offset=offset)
+    """Newest first. Returns summaries; fetch a project by id for its spec.
+    With `base_project_id`, only the scenarios of that project."""
+    return await projects_service.list_projects(
+        db, limit=limit, offset=offset, base_project_id=base_project_id
+    )
 
 
 @router.get("/{project_id}")
