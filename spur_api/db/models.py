@@ -41,6 +41,14 @@ class ProjectRow(Base):
     # changes `extensions` raises `version` but not this, so a run made
     # since is still a run of the project as it stands.
     inputs_version: Mapped[int] = mapped_column(default=1, server_default="1")
+    # The project this one is a scenario of: an option made from that base,
+    # to be compared with it. Null for a project that stands alone or is
+    # itself a base. A base is never a scenario of another, so a family is
+    # one base and its scenarios. Scenarios outlive a deleted base, as
+    # projects of their own.
+    base_project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime, server_default=func.now(), onupdate=func.now()

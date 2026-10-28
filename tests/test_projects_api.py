@@ -53,7 +53,8 @@ async def test_list_returns_summaries_without_the_spec(client, line4_project_dic
     (item,) = resp.json()
 
     assert set(item) == {
-        "id", "name", "spur_version", "owner", "created_at", "updated_at", "counts",
+        "id", "name", "spur_version", "owner", "base_project_id", "created_at",
+        "updated_at", "counts",
     }
     assert item["name"] == line4_project_dict["name"]
     assert item["counts"] == {
@@ -197,3 +198,71 @@ async def test_inputs_version_moves_only_when_the_simulation_inputs_change(
     saved = (await client.put(url, json=fewer)).json()
     assert (saved["version"], saved["inputs_version"]) == (4, 4)
     assert (await client.get(url)).json()["inputs_version"] == 4
+
+
+async def test_a_scenario_is_linked_to_its_base(client, line4_project_dict):
+    base = (await client.post("/v1/projects", json=line4_project_dict)).json()
+    assert base["base_project_id"] is None
+
+    option = dict(line4_project_dict, name="Option A")
+    resp = await client.post(
+        "/v1/projects", params={"base_project_id": base["id"]}, json=option
+    )
+    assert resp.status_code == 201
+    scenario = resp.json()
+    assert scenario["base_project_id"] == base["id"]
+
+    # Saving it leaves the link alone.
+    resp = await client.put(
+        f"/v1/projects/{scenario['id']}", json=dict(option, name="Option B")
+    )
+    assert resp.json()["base_project_id"] == base["id"]
+
+    # It is listed with every project, and alone among its base's scenarios.
+    everything = (await client.get("/v1/projects")).json()
+    assert {p["id"]: p["base_project_id"] for p in everything} == {
+        base["id"]: None,
+        scenario["id"]: base["id"],
+    }
+    scenarios = (
+        await client.get("/v1/projects", params={"base_project_id": base["id"]})
+    ).json()
+    assert [p["id"] for p in scenarios] == [scenario["id"]]
+
+
+async def test_a_scenario_of_a_scenario_shares_its_base(client, line4_project_dict):
+    base = (await client.post("/v1/projects", json=line4_project_dict)).json()
+    first = (
+        await client.post(
+            "/v1/projects", params={"base_project_id": base["id"]}, json=line4_project_dict
+        )
+    ).json()
+    second = (
+        await client.post(
+            "/v1/projects", params={"base_project_id": first["id"]}, json=line4_project_dict
+        )
+    ).json()
+    assert second["base_project_id"] == base["id"]
+
+
+async def test_a_scenario_needs_its_base_to_exist(client, line4_project_dict):
+    resp = await client.post(
+        "/v1/projects",
+        params={"base_project_id": "00000000-0000-0000-0000-000000000000"},
+        json=line4_project_dict,
+    )
+    assert resp.status_code == 404
+
+
+async def test_scenarios_outlive_their_base(client, line4_project_dict):
+    base = (await client.post("/v1/projects", json=line4_project_dict)).json()
+    scenario = (
+        await client.post(
+            "/v1/projects", params={"base_project_id": base["id"]}, json=line4_project_dict
+        )
+    ).json()
+
+    assert (await client.delete(f"/v1/projects/{base['id']}")).status_code == 204
+    resp = await client.get(f"/v1/projects/{scenario['id']}")
+    assert resp.status_code == 200
+    assert resp.json()["base_project_id"] is None

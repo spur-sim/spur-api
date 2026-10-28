@@ -25,17 +25,34 @@ def _to_schema(row: ProjectRow) -> Project:
         owner=row.owner,
         version=row.version,
         inputs_version=row.inputs_version,
+        base_project_id=row.base_project_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
 
 
 async def create_project(
-    db: AsyncSession, spec: ProjectCreate, owner: str | None
+    db: AsyncSession,
+    spec: ProjectCreate,
+    owner: str | None,
+    base_project_id: UUID | None = None,
 ) -> Project:
+    """Store a project. With `base_project_id` it is a scenario of that
+    project, or of that project's own base if it is a scenario itself, so
+    that every scenario of a family points at the one base."""
+    base_id = None
+    if base_project_id is not None:
+        base = await db.get(ProjectRow, base_project_id)
+        if base is None:
+            raise NotFoundError(f"Project {base_project_id} not found")
+        base_id = base.base_project_id or base.id
     spec_dict = spec.model_dump(exclude_unset=True)
     row = ProjectRow(
-        owner=owner, name=spec.name, spur_version=spec.spur_version, spec=spec_dict
+        owner=owner,
+        name=spec.name,
+        spur_version=spec.spur_version,
+        spec=spec_dict,
+        base_project_id=base_id,
     )
     db.add(row)
     await db.commit()
@@ -51,7 +68,10 @@ async def get_project(db: AsyncSession, project_id: UUID) -> Project:
 
 
 async def list_projects(
-    db: AsyncSession, limit: int = 100, offset: int = 0
+    db: AsyncSession,
+    limit: int = 100,
+    offset: int = 0,
+    base_project_id: UUID | None = None,
 ) -> list[ProjectSummary]:
     # Selects only the small columns and counts each spec section in SQL, so
     # listing never loads the (large) spec of every project.
@@ -64,6 +84,7 @@ async def list_projects(
             ProjectRow.name,
             ProjectRow.spur_version,
             ProjectRow.owner,
+            ProjectRow.base_project_id,
             ProjectRow.created_at,
             ProjectRow.updated_at,
             count("components").label("components"),
@@ -75,6 +96,8 @@ async def list_projects(
         .offset(offset)
         .limit(limit)
     )
+    if base_project_id is not None:
+        stmt = stmt.where(ProjectRow.base_project_id == base_project_id)
     result = await db.execute(stmt)
     return [
         ProjectSummary(
@@ -82,6 +105,7 @@ async def list_projects(
             name=r.name,
             spur_version=r.spur_version,
             owner=r.owner,
+            base_project_id=r.base_project_id,
             created_at=r.created_at,
             updated_at=r.updated_at,
             counts=ProjectCounts(

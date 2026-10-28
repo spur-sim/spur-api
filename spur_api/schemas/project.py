@@ -37,6 +37,9 @@ class Project(ProjectSpec):
     # before that change, so its results describe an earlier state. Saves
     # that touch only the name or `extensions` leave it alone.
     inputs_version: int = 1
+    # The project this one is a scenario of, if it is one. Set when it is
+    # created (`POST /v1/projects?base_project_id=`) and not changed after.
+    base_project_id: UUID | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -56,6 +59,7 @@ class ProjectSummary(BaseModel):
     name: str | None = None
     spur_version: str
     owner: str | None = None
+    base_project_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
     counts: ProjectCounts
