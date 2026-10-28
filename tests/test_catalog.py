@@ -30,7 +30,7 @@ async def test_shape(client):
     assert set(catalog) == {"components", "jitters", "collections"}
 
     track = _type(catalog, "components", "TimedTrack")
-    assert set(track) == {"name", "summary", "parameters"}
+    assert set(track) == {"name", "summary", "tags", "parameters"}
     assert track["parameters"][0] == {
         "name": "traversal_time",
         "type": "integer",
