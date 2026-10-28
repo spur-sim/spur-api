@@ -18,6 +18,26 @@ from spur_api.schemas.project import (
 _SIMULATION_INPUTS = ("components", "routes", "tours", "trains")
 
 
+def _without_nulls(value):
+    """`value` with its null-valued keys dropped, at any depth. A key written
+    as null and a key left out mean the same to spur, and a project fetched
+    from the API and saved back carries its optional keys as null while an
+    editor's save may leave them out. List items stay, nulls included, since
+    their position matters."""
+    if isinstance(value, dict):
+        return {k: _without_nulls(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_without_nulls(v) for v in value]
+    return value
+
+
+def _inputs_differ(old: dict, new: dict) -> bool:
+    return any(
+        _without_nulls(old.get(s)) != _without_nulls(new.get(s))
+        for s in _SIMULATION_INPUTS
+    )
+
+
 def _to_schema(row: ProjectRow) -> Project:
     return Project(
         **row.spec,
@@ -144,7 +164,7 @@ async def update_project(
         )
     row.version += 1
     new_spec = spec.model_dump(exclude_unset=True)
-    if any(new_spec.get(s) != row.spec.get(s) for s in _SIMULATION_INPUTS):
+    if _inputs_differ(row.spec, new_spec):
         row.inputs_version = row.version
     row.name = spec.name
     row.spur_version = spec.spur_version
