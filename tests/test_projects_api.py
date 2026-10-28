@@ -200,6 +200,29 @@ async def test_inputs_version_moves_only_when_the_simulation_inputs_change(
     assert (await client.get(url)).json()["inputs_version"] == 4
 
 
+async def test_inputs_version_ignores_nulls_written_in_or_left_out(
+    client, line4_project_dict
+):
+    # A copy made from a fetched project carries every optional key, as
+    # null; an editor's save leaves them out. Both mean the same thing.
+    nulls = {"name": None, "jitter": None, "collection": None}
+    with_nulls = {
+        **line4_project_dict,
+        "components": [{**nulls, **c} for c in line4_project_dict["components"]],
+    }
+    created = (await client.post("/v1/projects", json=with_nulls)).json()
+    url = f"/v1/projects/{created['id']}"
+
+    moved = {**line4_project_dict, "extensions": {"ui": {"nodes": []}}}
+    saved = (await client.put(url, json=moved)).json()
+    assert (saved["version"], saved["inputs_version"]) == (2, 1)
+
+    # A real change still counts, nulls or not.
+    named = [{**c, "name": "Renamed"} for c in moved["components"]]
+    saved = (await client.put(url, json={**moved, "components": named})).json()
+    assert (saved["version"], saved["inputs_version"]) == (3, 3)
+
+
 async def test_a_scenario_is_linked_to_its_base(client, line4_project_dict):
     base = (await client.post("/v1/projects", json=line4_project_dict)).json()
     assert base["base_project_id"] is None
