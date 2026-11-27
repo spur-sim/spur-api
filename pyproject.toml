@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "HTTP API service wrapping the spur mesoscopic railway simulation engine"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
